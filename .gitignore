@@ -1,4 +1,7 @@
 sub.md
+pictures/
+test/
+.claude/
 
 # --- テンプレートから追記 ---
 # ログファイル
@@ -28,6 +31,7 @@ __pycache__/
 # uv
 .python-version
 uv.lock
+.venv
 
 # IDE
 .vscode/
@@ -53,9 +57,6 @@ nul
 
 # ファイル分割システム（一時作業用）
 **/splited_files/
-
-# Claude Code hooks（テンプレートから管理）
-.claude/
 
 # hook設定（ローカル環境依存）
 .claude/hooks/jsons/hook_counters.json5
