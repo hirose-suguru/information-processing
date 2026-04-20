@@ -68,10 +68,11 @@ def fix_missing_levels(lines: list[str]) -> list[str]:
 #   戻り値: (変換後行リスト, {旧番号文字列: (新番号文字列, 新タイトル)} の対応表)
 # ---------------------------------------------------------------------------
 
-def renumber(lines: list[str]) -> tuple[list[str], dict[str, tuple[str, str]]]:
+def renumber(lines: list[str]) -> tuple[list[str], dict[str, tuple[str, str]], dict[str, str]]:
     counters = [0, 0, 0, 0, 0, 0]
     result: list[str] = []
     mapping: dict[str, tuple[str, str]] = {}  # 旧番号 -> (新番号, 新タイトル)
+    id_to_title: dict[str, str] = {}           # 新ID -> 新タイトル
     levels = build_level_list(lines)
 
     for line, lv in zip(lines, levels):
@@ -95,8 +96,9 @@ def renumber(lines: list[str]) -> tuple[list[str], dict[str, tuple[str, str]]]:
 
         if old_number:
             mapping[old_number] = (new_number, clean_title)
+        id_to_title[number_to_id(new_number)] = clean_title
 
-    return result, mapping
+    return result, mapping, id_to_title
 
 
 # ---------------------------------------------------------------------------
@@ -129,10 +131,8 @@ def insert_anchors(lines: list[str]) -> list[str]:
 #   text が旧タイトルと一致すれば新タイトルにも置換。
 # ---------------------------------------------------------------------------
 
-def update_links(lines: list[str], mapping: dict[str, tuple[str, str]]) -> list[str]:
-    # mapping は 旧番号("5.2.2") -> (新番号("6.2.3"), 新タイトル)
-    # id との相互変換用に id -> 旧番号 の逆引き表を作る
-    # 例: "five-two-two" -> "5.2.2"
+def update_links(lines: list[str], mapping: dict[str, tuple[str, str]], id_to_title: dict[str, str]) -> list[str]:
+    # mapping は 旧番号("5.2.2") -> (新番号("6.2.3"), 新タイトル)、IDが変わった場合の追跡用
     id_to_old: dict[str, str] = {}
     for old_num in mapping:
         old_id = number_to_id(old_num)
@@ -140,24 +140,21 @@ def update_links(lines: list[str], mapping: dict[str, tuple[str, str]]) -> list[
 
     def replace_link(match: re.Match) -> str:
         text, anchor_id = match.group(1), match.group(2)
-        if not is_numeric_id(anchor_id) or anchor_id not in id_to_old:
+        if not is_numeric_id(anchor_id):
             return match.group(0)
 
-        old_num = id_to_old[anchor_id]
-        new_num, new_title = mapping[old_num]
-        new_id = number_to_id(new_num)
+        # IDが変わった場合は新IDへ
+        if anchor_id in id_to_old:
+            old_num = id_to_old[anchor_id]
+            new_num, new_title = mapping[old_num]
+            new_id = number_to_id(new_num)
+        elif anchor_id in id_to_title:
+            new_id = anchor_id
+            new_title = id_to_title[anchor_id]
+        else:
+            return match.group(0)
 
-        # 旧タイトルと一致すれば新タイトルへ、それ以外はそのまま
-        old_title = EXISTING_NUMBER_RE.sub("", text).strip()
-        new_text = new_title if old_title == new_title or _matches_old_title(text, old_num, mapping) else text
+        new_text = new_title if text == "" else text
         return f"[{new_text}](#{new_id})"
 
     return [INLINE_LINK_RE.sub(replace_link, line) for line in lines]
-
-
-def _matches_old_title(text: str, old_num: str, mapping: dict[str, tuple[str, str]]) -> bool:
-    """text が旧見出しタイトル（番号除去後）と一致するか。"""
-    _, new_title = mapping[old_num]
-    # Pass 2 後は新タイトルしか持っていないので、新タイトルと一致したら置換対象とみなす
-    clean = EXISTING_NUMBER_RE.sub("", text).strip()
-    return clean == new_title

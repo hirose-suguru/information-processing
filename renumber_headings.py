@@ -9,10 +9,10 @@ from modules import fix_missing_levels, insert_anchors, renumber, update_links
 def process_markdown(text: str) -> str:
     lines = text.splitlines()
 
-    lines = fix_missing_levels(lines)       # Pass 1: 欠落レベル補完
-    lines, mapping = renumber(lines)        # Pass 2: 連番付与 + 対応表生成
-    lines = insert_anchors(lines)           # Pass 3: アンカー挿入
-    lines = update_links(lines, mapping)    # Pass 4: インラインリンク更新
+    lines = fix_missing_levels(lines)               # Pass 1: 欠落レベル補完
+    lines, mapping, id_to_title = renumber(lines)  # Pass 2: 連番付与 + 対応表生成
+    lines = insert_anchors(lines)                   # Pass 3: アンカー挿入
+    lines = update_links(lines, mapping, id_to_title)  # Pass 4: インラインリンク更新
 
     return "\n".join(lines) + "\n"
 

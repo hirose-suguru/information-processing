@@ -5,7 +5,7 @@ import re
 HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)\s*$")
 EXISTING_NUMBER_RE = re.compile(r"^\s*\d+(?:\.\d+)*\.?\s*")
 FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
-ANCHOR_TAG_RE = re.compile(r'^<a id="[^"]+"></a>$')
+ANCHOR_TAG_RE = re.compile(r'^<a id="[^"]+">(</a>|<a/>)$')
 INLINE_LINK_RE = re.compile(r'\[([^\]]*)\]\(#([\w-]+)\)')
 
 DIGIT_WORDS = {
