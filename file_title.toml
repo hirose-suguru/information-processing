@@ -1,0 +1,24 @@
+[sections.1]
+file = "note_segments\\devcon.md"
+title = "devcon"
+
+[sections.2]
+file = "note_segments\\language_theory.md"
+title = "language_theory"
+
+[sections.3]
+file = "note_segments\\refugee.md"
+title = "refugee"
+
+[cache.id_to_section]
+zero-zero-zero-zero-one = "devcon"
+
+[cache.section_to_file]
+devcon = "note_segments\\devcon.md"
+language_theory = "note_segments\\language_theory.md"
+refugee = "note_segments\\refugee.md"
+
+[cache.number_to_section]
+1 = "devcon"
+2 = "language_theory"
+3 = "refugee"
