@@ -10,6 +10,7 @@ test/
 
 # キャッシュのディレクトリとファイル
 cache
+.cache/
 stdin_cache.json
 ups_lock
 
