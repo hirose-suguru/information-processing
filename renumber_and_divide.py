@@ -1,56 +1,23 @@
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
-from modules import fix_missing_levels, insert_anchors, renumber, update_links
-from modules.config import ConfigManager
+from modules import CacheManager, fix_missing_levels, insert_anchors, renumber, update_links
+from modules.split import SplitManager
 
 
-def process_markdown(text: str) -> tuple[str, dict[str, str]]:
+def process_markdown(text: str) -> tuple[str, dict[str, tuple[str, str]], dict[str, str]]:
+    """markdown を4パスで処理"""
     lines = text.splitlines()
 
-    lines = fix_missing_levels(lines)               # Pass 1: 欠落レベル補完
-    lines, mapping, id_to_title, old_id_to_new_id = renumber(lines)  # Pass 2: 連番付与 + 対応表生成
-    lines = insert_anchors(lines)                   # Pass 3: アンカー挿入
-    lines = update_links(lines, mapping, id_to_title, old_id_to_new_id)  # Pass 4: インラインリンク更新
+    lines = fix_missing_levels(lines)
+    lines, mapping, id_to_title = renumber(lines)
+    lines = insert_anchors(lines)
+    lines = update_links(lines, mapping, id_to_title)
 
-    return "\n".join(lines) + "\n", old_id_to_new_id
-
-
-def process_all_files(config: ConfigManager) -> int:
-    """information_processing.md と全セクションファイルを処理"""
-    # メインファイル処理
-    main_path = Path("information_processing.md")
-    if not main_path.exists():
-        print(f"File not found: {main_path}", file=sys.stderr)
-        return 1
-
-    original = main_path.read_text(encoding="utf-8")
-    updated, old_id_to_new_id = process_markdown(original)
-    main_path.write_text(updated, encoding="utf-8", newline="\n")
-    print(f"Processed: {main_path}")
-
-    # セクションファイルを処理
-    for section_num, file_path in config.get_section_files():
-        section_file = Path(file_path)
-        if not section_file.exists():
-            print(f"Warning: Section file not found: {section_file}", file=sys.stderr)
-            continue
-
-        original = section_file.read_text(encoding="utf-8")
-        updated, section_old_id_to_new_id = process_markdown(original)
-        section_file.write_text(updated, encoding="utf-8", newline="\n")
-        print(f"Processed: {section_file}")
-
-        # ID マッピングをキャッシュに記録
-        for old_id, new_id in section_old_id_to_new_id.items():
-            config.update_id_mapping(old_id, new_id, section_num)
-
-    # config.toml を更新
-    config.save()
-    print(f"Updated: {config.config_path}")
-    return 0
+    return "\n".join(lines) + "\n", mapping, id_to_title
 
 
 def main() -> int:
@@ -62,7 +29,6 @@ def main() -> int:
         print("  2 args:  process input.md and write to output.md", file=sys.stderr)
         return 1
 
-    # 引数がある場合は単一ファイル処理
     if len(args) == 1:
         in_path = out_path = Path(args[0])
     elif len(args) == 2:
@@ -75,10 +41,29 @@ def main() -> int:
         print(f"File not found: {in_path}", file=sys.stderr)
         return 1
 
+    cache = CacheManager()
+    config_path = Path("file_title.toml")
     original = in_path.read_text(encoding="utf-8")
-    updated, _ = process_markdown(original)
+    config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    signature_source = "\n".join([str(in_path.resolve()), original, config_text])
+    signature = hashlib.sha256(signature_source.encode("utf-8")).hexdigest()
+    cached_signature = cache.load_input_signature(out_path.stem)
+    if cached_signature == signature and out_path.exists():
+        print(f"Skipped (cache hit): {in_path}")
+        return 0
+
+    updated, _, id_to_title = process_markdown(original)
     out_path.write_text(updated, encoding="utf-8", newline="\n")
     print(f"Processed: {in_path} -> {out_path}")
+
+    # 見出しIDとタイトルの対応をキャッシュ
+    cache.save_id_section_title(out_path.stem, id_to_title)
+
+    # 分割処理を実行
+    splitter = SplitManager(out_path)
+    splitter.split()
+    cache.save_input_signature(out_path.stem, signature)
+
     return 0
 
 

@@ -1,52 +1,96 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+from pathlib import Path
 
 
-@dataclass
-class SectionCache:
-    """セクション情報のキャッシュ: id ↔ section_title ↔ file_name"""
+class CacheManager:
+    """.cache/renumber_and_divide 配下のキャッシュファイルを管理"""
 
-    id_to_section: dict[str, str] = field(default_factory=dict)
-    """アンカーID (one, two, one-one) → セクションタイトル"""
+    def __init__(self, cache_dir: Path | str = Path(".cache/renumber_and_divide")):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    section_to_file: dict[str, str] = field(default_factory=dict)
-    """セクションタイトル → ファイルパス (note_segments/言語理論.md など)"""
+    def get_section_cache_dir(self, section_name: str) -> Path:
+        """セクション名からキャッシュディレクトリを取得"""
+        return self.cache_dir / section_name
 
-    number_to_section: dict[int, str] = field(default_factory=dict)
-    """セクション番号 (1, 2, 3) → セクションタイトル"""
+    def load_id_section_title(self, section_name: str) -> dict[str, str]:
+        """id_section_title.json を読み込み（old_id → section_title）"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_file = cache_dir / "id_section_title.json"
+        if not cache_file.exists():
+            return {}
+        with open(cache_file, "r", encoding="utf-8") as f:
+            return json.load(f)
 
-    def update_id_mapping(self, old_id: str, new_id: str, section_title: str) -> None:
-        """ID の変更を記録（番号リネーム時に使用）"""
-        if old_id in self.id_to_section:
-            del self.id_to_section[old_id]
-        self.id_to_section[new_id] = section_title
+    def save_id_section_title(self, section_name: str, mapping: dict[str, str]) -> None:
+        """id_section_title.json に保存"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "id_section_title.json"
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, indent=2)
 
-    def set_section_file(self, section_num: int, section_title: str, file_path: str) -> None:
-        """セクション番号 ↔ タイトル ↔ ファイルパスを同時に設定"""
-        self.number_to_section[section_num] = section_title
-        self.section_to_file[section_title] = file_path
+    def load_section_number_title(self, section_name: str) -> dict[str, str]:
+        """section_number_title.json を読み込み（section_number → title）"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_file = cache_dir / "section_number_title.json"
+        if not cache_file.exists():
+            return {}
+        with open(cache_file, "r", encoding="utf-8") as f:
+            return json.load(f)
 
-    def get_file_by_number(self, section_num: int) -> str | None:
-        """セクション番号からファイルパスを取得"""
-        title = self.number_to_section.get(section_num)
-        if title:
-            return self.section_to_file.get(title)
-        return None
+    def save_section_number_title(self, section_name: str, mapping: dict[str, str]) -> None:
+        """section_number_title.json に保存"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "section_number_title.json"
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, indent=2)
 
-    def to_dict(self) -> dict:
-        """TOML への変換用辞書化"""
-        return {
-            "id_to_section": self.id_to_section,
-            "section_to_file": self.section_to_file,
-            "number_to_section": {str(k): v for k, v in self.number_to_section.items()},
-        }
+    def load_split_file_names(self, section_name: str) -> dict[str, str]:
+        """split_file_names.json を読み込み（section_N → file_name）"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_file = cache_dir / "split_file_names.json"
+        if not cache_file.exists():
+            return {}
+        with open(cache_file, "r", encoding="utf-8") as f:
+            return json.load(f)
 
-    @classmethod
-    def from_dict(cls, data: dict) -> SectionCache:
-        """TOML からの復元"""
-        cache = cls()
-        cache.id_to_section = data.get("id_to_section", {})
-        cache.section_to_file = data.get("section_to_file", {})
-        cache.number_to_section = {int(k): v for k, v in data.get("number_to_section", {}).items()}
-        return cache
+    def save_split_file_names(self, section_name: str, mapping: dict[str, str]) -> None:
+        """split_file_names.json に保存"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "split_file_names.json"
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, indent=2)
+
+    def update_id_mapping(self, section_name: str, old_id: str, new_id: str, title: str) -> None:
+        """ID の変更をキャッシュに記録"""
+        id_mapping = self.load_id_section_title(section_name)
+        if old_id in id_mapping:
+            del id_mapping[old_id]
+        id_mapping[new_id] = title
+        self.save_id_section_title(section_name, id_mapping)
+
+    def update_section_number(self, section_name: str, section_num: int, title: str) -> None:
+        """セクション番号とタイトルをキャッシュに記録"""
+        num_mapping = self.load_section_number_title(section_name)
+        num_mapping[str(section_num)] = title
+        self.save_section_number_title(section_name, num_mapping)
+
+    def load_input_signature(self, section_name: str) -> str | None:
+        """input_signature.txt を読み込み"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_file = cache_dir / "input_signature.txt"
+        if not cache_file.exists():
+            return None
+        return cache_file.read_text(encoding="utf-8").strip()
+
+    def save_input_signature(self, section_name: str, signature: str) -> None:
+        """input_signature.txt に保存"""
+        cache_dir = self.get_section_cache_dir(section_name)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "input_signature.txt"
+        cache_file.write_text(signature + "\n", encoding="utf-8", newline="\n")
