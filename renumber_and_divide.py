@@ -7,6 +7,8 @@ from pathlib import Path
 from modules import CacheManager, fix_missing_levels, insert_anchors, renumber, update_links
 from modules.split import SplitManager
 
+PIPELINE_SIGNATURE_VERSION = "2"
+
 
 def process_markdown(text: str) -> tuple[str, dict[str, tuple[str, str]], dict[str, str]]:
     """markdown を4パスで処理"""
@@ -45,7 +47,7 @@ def main() -> int:
     config_path = Path("file_title.toml")
     original = in_path.read_text(encoding="utf-8")
     config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-    signature_source = "\n".join([str(in_path.resolve()), original, config_text])
+    signature_source = "\n".join([PIPELINE_SIGNATURE_VERSION, str(in_path.resolve()), original, config_text])
     signature = hashlib.sha256(signature_source.encode("utf-8")).hexdigest()
     cached_signature = cache.load_input_signature(out_path.stem)
     if cached_signature == signature and out_path.exists():

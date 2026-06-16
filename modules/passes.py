@@ -5,7 +5,7 @@ import re
 from .constants import (
     ANCHOR_TAG_RE, EXISTING_NUMBER_RE, HEADING_RE, INLINE_LINK_RE, is_numeric_id,
 )
-from .helpers import build_level_list, number_to_id
+from .helpers import build_level_list, id_to_number, number_to_id, number_to_legacy_id
 
 
 # ---------------------------------------------------------------------------
@@ -133,10 +133,10 @@ def insert_anchors(lines: list[str]) -> list[str]:
 
 def update_links(lines: list[str], mapping: dict[str, tuple[str, str]], id_to_title: dict[str, str]) -> list[str]:
     # mapping は 旧番号("5.2.2") -> (新番号("6.2.3"), 新タイトル)、IDが変わった場合の追跡用
-    id_to_old: dict[str, str] = {}
+    id_to_old: dict[str, list[str]] = {}
     for old_num in mapping:
-        old_id = number_to_id(old_num)
-        id_to_old[old_id] = old_num
+        for old_id in (number_to_id(old_num), number_to_legacy_id(old_num)):
+            id_to_old.setdefault(old_id, []).append(old_num)
 
     def replace_link(match: re.Match) -> str:
         text, anchor_id = match.group(1), match.group(2)
@@ -144,8 +144,20 @@ def update_links(lines: list[str], mapping: dict[str, tuple[str, str]], id_to_ti
             return match.group(0)
 
         # IDが変わった場合は新IDへ
-        if anchor_id in id_to_old:
-            old_num = id_to_old[anchor_id]
+        old_num_from_id = id_to_number(anchor_id)
+        if old_num_from_id in mapping:
+            old_num = old_num_from_id
+            new_num, new_title = mapping[old_num]
+            new_id = number_to_id(new_num)
+        elif anchor_id in id_to_old:
+            candidates = id_to_old[anchor_id]
+            if len(candidates) == 1:
+                old_num = candidates[0]
+            else:
+                matched = [candidate for candidate in candidates if mapping[candidate][1] == text]
+                if len(matched) != 1:
+                    return match.group(0)
+                old_num = matched[0]
             new_num, new_title = mapping[old_num]
             new_id = number_to_id(new_num)
         elif anchor_id in id_to_title:
